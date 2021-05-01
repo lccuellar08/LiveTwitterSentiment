@@ -3,6 +3,8 @@ import tweepy
 import config as cfg
 import pandas as pd
 import re
+import nltk
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
 
 class StreamListener(tweepy.StreamListener):
     def __init__(self):
@@ -23,10 +25,26 @@ class StreamListener(tweepy.StreamListener):
     	# current_score: Float - The current sentiment of all tweets aggregated
     	self.current_score = 0.0
 
+    	self.sentiment_model = self.get_model()
+
+    def get_model(self):
+    	nltk.download('vader_lexicon')
+    	return(SentimentIntensityAnalyzer())
+
+    def get_score(self,tweet):
+    	score = self.sentiment_model.polarity_scores(tweet)
+    	if(type(score) is dict):
+    		score = score["compound"]
+
+    		#normalize score
+    		score = (score - (-1)) / 2
+    		return(score)
+    	else:
+    		return 0
+
     def on_status(self, status):
         tweet = self.format_tweet(status.text)
-        print(tweet)
-        score = 1
+        score = self.get_score(tweet)
 
         # Create dictionary from the handled tweet
         tweet_dict = {}
@@ -45,6 +63,8 @@ class StreamListener(tweepy.StreamListener):
         # Recalculate current score
         self.current_score = self.aggregate_score / self.num_tweets
 
+        self.print_status(tweet, score)
+
     def on_error(self, status_code):
         if status_code == 420:
             return False
@@ -61,7 +81,18 @@ class StreamListener(tweepy.StreamListener):
     	# Remove all non alphabet characters
     	tweet_f = re.sub('[^a-zA-z0-9\s]','',tweet_f)
 
+    	# Remove new lines
+    	tweet_f = tweet_f.replace("\n", "")
+
     	return(tweet_f) 
+
+    def print_status(self, tweet, sentiment):
+
+    	short_tweet = tweet[0:50]
+    	current_score = format(self.current_score, '.2f')
+    	sentiment = round(sentiment,2)
+
+    	print(f"Overall Sen: {current_score}    Tweet: {short_tweet: <50}...    Sentiment: {sentiment}", end = '\r', flush = True)
 
 def get_api():
 	auth = tweepy.OAuthHandler(cfg.consumer_key, cfg.consumer_secret)
@@ -70,12 +101,13 @@ def get_api():
 	return(api)
 
 def main(phrase):
-	print(phrase)
 
 	api = get_api()
 
 	stream_listener = StreamListener()
 	stream = tweepy.Stream(auth=api.auth, listener=stream_listener)
+
+	print("")
 	try:
 		stream.filter(track=[phrase])
 	except KeyboardInterrupt:
