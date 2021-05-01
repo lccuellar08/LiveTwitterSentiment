@@ -128,4 +128,8 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+# config.py contains API credentials
 config.py
+
+# csv files
+*.csv
